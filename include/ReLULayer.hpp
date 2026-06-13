@@ -16,7 +16,6 @@ public:
     void forward(const float *X_input, int batch) override;
     void backward(const float *dOut, int batch) override;
     
-    // Ya no necesitas declarar update() si la clase Layer tiene una implementación por defecto vacía.
 };
 
 #endif

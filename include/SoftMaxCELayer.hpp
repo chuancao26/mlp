@@ -15,10 +15,8 @@ public:
 
     void forward(const float *X_input, int batch) override;
     
-    // Aquí 'y_true' toma el lugar de 'dOut' para iniciar la cadena de gradientes
     void backward(const float *y_true, int batch) override;
     
-    // Método extra propio de esta capa para devolver el error numérico
     float compute_loss(const float* y_true, int batch); 
 };
 

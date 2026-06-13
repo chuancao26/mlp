@@ -106,18 +106,16 @@ DenseLayer::~DenseLayer()
     cublasDestroy(handle);
 }
 
-// NUEVA FIRMA: El parámetro d_Z se quita
 void DenseLayer::forward(const float *X_batch, int batch_size)
 {
     int total_elements = batch_size * in_feats;
     int threads = 256;
     int blocks = (total_elements + threads - 1) / threads;
 
-    // Guardar X para el backward
     copyCuda<<<blocks, threads>>>(d_X_input, X_batch, total_elements);
 
     float alpha = 1.0f, beta = 0.0f;
-    // El resultado se guarda en this->d_output
+
     cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N,
                 out_feats, batch_size, in_feats,
                 &alpha, d_W, in_feats, d_X_input, in_feats,
@@ -127,23 +125,19 @@ void DenseLayer::forward(const float *X_batch, int batch_size)
     addbiasKernel<<<blocksZ, threads>>>(d_output, d_b, batch_size, out_feats);
 }
 
-// NUEVA FIRMA: El parámetro d_dX se quita
 void DenseLayer::backward(const float *d_dout, int batch_size)
 {
     float alpha_dw = 1.0f / batch_size, beta = 0.0f;
 
-    // Calcular dW
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T,
                 in_feats, out_feats, batch_size, 
                 &alpha_dw, d_X_input, in_feats, d_dout, out_feats, 
                 &beta, d_dW, in_feats);
 
-    // Calcular db
     int threads = 256;
     int blocks_db = (out_feats + threads - 1) / threads;
     compute_db_kernel<<<blocks_db, threads>>>(d_dout, d_db, batch_size, out_feats);
 
-    // Calcular dX (d_grad_input) para pasar a la capa anterior
     float alpha_dx = 1.0f;
     cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
                 in_feats, batch_size, out_feats, 

@@ -26,7 +26,6 @@ ReLULayer::ReLULayer(int feats, int batch) : max_batch(batch), features(feats)
 {
     cudaMalloc(&d_X_input, max_batch * features * sizeof(float));
     
-    // NUEVO: Memoria base para forward y backward
     cudaMalloc(&d_output, max_batch * features * sizeof(float));
     cudaMalloc(&d_grad_input, max_batch * features * sizeof(float));
 }
@@ -38,22 +37,19 @@ ReLULayer::~ReLULayer()
     cudaFree(d_grad_input);
 }
 
-// NUEVA FIRMA
 void ReLULayer::forward(const float* d_X, int current_batch)
 {
     int total = current_batch * features;
     int threads = 256;
     int blocks = (total + threads - 1) / threads;
-    // Guarda el resultado en d_output
+
     forward_kernel<<<blocks, threads>>>(d_X, d_output, d_X_input, total);
 }
 
-// NUEVA FIRMA
 void ReLULayer::backward(const float* d_dOut, int batch)
 {
     int total = batch * features;
     int threads = 256;
     int blocks = (total + threads - 1) / threads;
-    // Calcula el gradiente y lo guarda en d_grad_input
     backward_kernel<<<blocks, threads>>>(d_dOut, d_grad_input, d_X_input, total);
 }
