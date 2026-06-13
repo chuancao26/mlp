@@ -18,10 +18,9 @@ __global__ void softmax_kernel(const float *d_X, float *d_Z, float *prob, int cl
             }
         }
         float sum = 0.0f;
-        // CORRECCIÓN DE TYPO: 'float' en vez de 'floa'
         for (int c = 0; c < classes; c++)
         {
-            float e = std::expf(d_X[row * classes + c] - max_val);
+            float e = expf(d_X[row * classes + c] - max_val);
             prob[row * classes + c] = e;
             sum += e;
         }
@@ -29,7 +28,6 @@ __global__ void softmax_kernel(const float *d_X, float *d_Z, float *prob, int cl
         for (int c = 0; c < classes; c++)
         {
             prob[row * classes + c] /= sum;
-            // Esta capa es la salida final, d_Z contiene las predicciones
             d_Z[row * classes + c] = prob[row * classes + c];
         }
     }
