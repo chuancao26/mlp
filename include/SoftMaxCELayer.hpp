@@ -10,11 +10,8 @@ class SoftMaxCELayer: public Layer
     float *d_prob, *d_total_loss;
 
     public:
-    SoftMaxCELayer(int n_class, int batch)
-    {
-        cudaMalloc(&d_prob, classes * max_batch * sizeof(float));
-        cudaMalloc(&d_total_loss, )
-    }
+    SoftMaxCELayer(int n_class, int batch);
+    ~SoftMaxCELayer();
 
     void forward(const float *X_input,
                  float *Z,
@@ -23,14 +20,7 @@ class SoftMaxCELayer: public Layer
                   float *dX,
                   int batch) override;
     void update(float lr) override;
-}
-
-
-
-
-
-
-
+};
 
 
 #endif
