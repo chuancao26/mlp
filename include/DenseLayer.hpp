@@ -15,12 +15,14 @@ public:
 
     DenseLayer(int in_f,
                int out_f,
-               int batch_size) : in_feats(in_f), out_feats(out_f), max_batch(batch_size);
+               int max_batch_size);
     ~DenseLayer() override;
     void forward(const float *X_input,
-                 float *Z) override;
+                 float *Z,
+                 int batch) override;
     void backward(const float *dOut,
-                  float *dX) override;
+                  float *dX,
+                  int batch) override;
     void update(float lr) override;
 };
 

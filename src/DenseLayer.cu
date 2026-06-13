@@ -12,13 +12,40 @@ __global__ void copyCuda(float *dest, const float *src, int n)
         dest[idx] = src[idx];
     }
 }
-__global__ void addbiasKernel(float* d_Z, float* d_b, int batch_size, int feats)
+__global__ void addbiasKernel(float *d_Z, float *d_b, int batch_size, int feats)
 {
-    int idx = blockIdx.x + blockDim.x + threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < batch_size * feats)
     {
         int col = idx % feats;
-        d_Z[idx] = d_b[col];
+        d_Z[idx] += d_b[col];
+    }
+}
+__global__ void compute_db_kernel(const float *d_Out, float *d_db, int batch_size, int out_feat)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < out_feat)
+    {
+        float sum = 0.0f;
+        for (int i = 0; i < batch_size; i++)
+        {
+            sum += d_Out[i * out_feat + idx];
+        }
+        d_db[idx] = sum / static_cast<float>(batch_size);
+    }
+}
+__global__ void update_weights(float *d_W, float *d_b,
+                               const float *d_dW, const float *d_db, 
+                               const float lr, const int in_feat, int out_feat)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < out_feat * in_feat)
+    {
+        d_W[idx] -= d_dW[idx] * lr;
+    }
+    if (idx < out_feat)
+    {
+        d_b[idx] -= d_db[idx] * lr;
     }
 }
 
@@ -53,7 +80,7 @@ DenseLayer::DenseLayer(
         for (int i = 0; i < out_feats; i++)
             h_b[i] = 0.0f;
         cudaMemcpy(d_W, h_W, out_feats * in_feats * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(h_b, d_b, out_feats * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_b, h_b, out_feats * sizeof(float), cudaMemcpyHostToDevice);
 
         delete[] h_b;
         delete[] h_W;
@@ -66,12 +93,14 @@ DenseLayer::~DenseLayer()
     cudaFree(d_db);
     cudaFree(d_dW);
     cudaFree(d_X_input);
+    cublasDestroy(handle);
 }
 void DenseLayer::forward(const float *X_batch,
-                         float *d_Z)
+                         float *d_Z,
+                         int batch_size)
 {
     // necesitamos hacer multiplicacion de pesos con X y sumar bias
-    int total_elements = max_batch * in_feats;
+    int total_elements = batch_size * in_feats;
     int threads = 256;
     int blocks = (total_elements + threads - 1) / threads;
 
@@ -82,25 +111,40 @@ void DenseLayer::forward(const float *X_batch,
     float alpha = 1.0f, beta = 0.0f;
 
     cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N,
-                out_feats, max_batch, in_feats,
+                out_feats, batch_size, in_feats,
                 &alpha, d_W, in_feats, d_X_input, in_feats,
                 &beta, d_Z, out_feats);
 
-    int blocksZ = (max_batch * out_feats + threads - 1) / threads;
-    addbiasKernel<<<blocksZ, threads>>>(d_Z, d_b, 
-    max_batch, out_feats);
+    int blocksZ = (batch_size * out_feats + threads - 1) / threads;
+    addbiasKernel<<<blocksZ, threads>>>(d_Z, d_b,
+                                        batch_size, out_feats);
 }
-void DenseLayer::backward(const float* d_dout, float* d_dX)
+void DenseLayer::backward(const float *d_dout, float *d_dX, int batch_size)
 {
-    dw = 256 x 784
-    X = 64 x 784
-    dout = 64 * 256
-    dout * X^t
-    64* 256 , 64x784
 
     // necesitamos hacer 2 multplicaciones de matrices i
     // Hallemos el dW y db. dW = d_out * X
-    float alpha_dw = 1.0f / max_batch, beta =0.0f;
-    cublasSgemm(handle, CUBLAS)
+    float alpha_dw = 1.0f / batch_size,
+          beta = 0.0f;
 
+    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T,
+                in_feats, out_feats, batch_size, &alpha_dw, d_X_input, in_feats, d_dout, out_feats, &beta, d_dW, in_feats);
+
+    int threads = 256;
+    int blocks_db = (out_feats + threads - 1) / threads;
+
+    // calculamos el d_b
+    compute_db_kernel<<<blocks_db, threads>>>(d_dout, d_db, batch_size, out_feats);
+
+    // calcumos el d_dx
+    float alpha_dx = 1.0f;
+    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N,
+                in_feats, batch_size, out_feats, &alpha_dx, d_W, in_feats,
+                d_dout, out_feats, &beta, d_dX, in_feats);
+}
+void DenseLayer::update(float lr)
+{
+    int threads = 256;
+    int blocks = (in_feats * out_feats + threads - 1) / threads;
+    update_weights<<<blocks, threads>>>(d_W, d_b, d_dW, d_db, lr, in_feats, out_feats);
 }
