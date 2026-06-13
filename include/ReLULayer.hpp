@@ -3,23 +3,20 @@
 
 #include "Layer.hpp"
 
-class ReLULayer:public Layer
+class ReLULayer : public Layer
 {
-    private:
+private:
     int features, max_batch;
     float* d_X_input;
 
-    public:
+public:
     ReLULayer(int feats, int batch);
-    ~ReLULayer();
-    void forward(const float *X_input,
-                 float *Z,
-                 int batch) override;
-    void backward(const float *dOut,
-                  float *dX,
-                  int batch) override;
-    void update(float lr) override;
+    ~ReLULayer() override;
+
+    void forward(const float *X_input, int batch) override;
+    void backward(const float *dOut, int batch) override;
     
+    // Ya no necesitas declarar update() si la clase Layer tiene una implementación por defecto vacía.
 };
 
 #endif
