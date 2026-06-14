@@ -42,22 +42,16 @@ __global__ void softmax_backward_kernel(const float *y_true, const float *y_hat,
         d_dX[idx] = y_hat[idx] - y_true[idx];
     }
 }
-
-__global__ void compute_ce_loss_kernel(const float *y_true, const float *y_hat, float *d_loss, int total)
+__global__ void compute_ce_loss_kernel(const float* y_true, const float* y_prob, float* d_total_loss, int classes, int batch)
 {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    float local_loss = 0.0f;
-    if (idx < total)
-    {
-        if (y_true[idx] > 0.5f)
-        {
-            local_loss = -logf(fmaxf(y_hat[idx], 1e-7f));
-            atomicAdd(d_loss, local_loss);
+    if (idx < batch * classes) {
+        if (y_true[idx] > 0.5f) { // One-Hot encoding (solo procesamos el 1.0)
+            float loss_val = -logf(fmaxf(y_prob[idx], 1e-7f));
+            atomicAdd(d_total_loss, loss_val);
         }
     }
 }
-
 SoftMaxCELayer::SoftMaxCELayer(int n_class, int batch) : classes(n_class), max_batch(batch)
 {
     cudaMalloc(&d_prob, classes * max_batch * sizeof(float));
@@ -92,20 +86,22 @@ void SoftMaxCELayer::backward(const float *y_true, int batch)
     softmax_backward_kernel<<<blocks, threads>>>(y_true, d_prob, d_grad_input, total);
 }
 
-float SoftMaxCELayer::compute_loss(const float *y_true, int batch)
+float SoftMaxCELayer::compute_loss(const float* y_true, int batch) 
 {
     float h_zero = 0.0f;
     cudaMemcpy(d_total_loss, &h_zero, sizeof(float), cudaMemcpyHostToDevice);
 
-    int total = classes * batch;
+    int total_elements = batch * classes;
     int threads = 256;
-    int blocks = (total + threads - 1) / threads;
-    compute_ce_loss_kernel<<<blocks, threads>>>(y_true, d_output, d_total_loss, total);
+    int blocks = (total_elements + threads - 1) / threads;
+    
+    // Aquí es d_output, ya que ahí guardaste las probabilidades en el forward()
+    compute_ce_loss_kernel<<<blocks, threads>>>(y_true, d_output, d_total_loss, classes, batch);
 
     float h_total_loss = 0.0f;
-    cudaMemcpy(&h_total_loss, d_total_loss, sizeof(float), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(&h_total_loss, d_total_loss, sizeof(float), cudaMemcpyDeviceToHost);
 
-    return h_total_loss / static_cast<float>(batch);
+    return h_total_loss / static_cast<float>(batch); 
 }
 int SoftMaxCELayer::get_classes()
 {
