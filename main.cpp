@@ -14,7 +14,7 @@ int main()
     // 1. Hiperparámetros base
     const int classes = 10;
     const int batch_size = 256;
-    const int epochs = 5;
+    const int epochs = 50;
     const float learning_rate = 0.01f;
 
     // Rutas a los archivos de MNIST
