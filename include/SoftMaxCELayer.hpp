@@ -18,6 +18,8 @@ public:
     void backward(const float *y_true, int batch) override;
     
     float compute_loss(const float* y_true, int batch); 
+
+    int get_classes();
 };
 
 #endif

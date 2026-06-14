@@ -63,7 +63,6 @@ SoftMaxCELayer::SoftMaxCELayer(int n_class, int batch) : classes(n_class), max_b
     cudaMalloc(&d_prob, classes * max_batch * sizeof(float));
     cudaMalloc(&d_total_loss, sizeof(float));
 
-    // NUEVO: Memoria base
     cudaMalloc(&d_output, classes * max_batch * sizeof(float));
     cudaMalloc(&d_grad_input, classes * max_batch * sizeof(float));
 }
@@ -107,4 +106,8 @@ float SoftMaxCELayer::compute_loss(const float *y_true, int batch)
     cudaMemcpy(&h_total_loss, d_total_loss, sizeof(float), cudaMemcpyDeviceToDevice);
 
     return h_total_loss / static_cast<float>(batch);
+}
+int SoftMaxCELayer::get_classes()
+{
+    return classes;
 }
